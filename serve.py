@@ -61,7 +61,9 @@ def convert_to_png_and_resize(file: UploadFile, max_pixels=5400000):
     except Exception as e:
         # Handle exceptions
         print(f"Error converting file: {e}")    
-
+@app.get('/')
+def read_root():
+    return{'Nothing to see here'}
 @app.post("/analyze")
 def analyze(response: Response, file: UploadFile = File(...)):
 
