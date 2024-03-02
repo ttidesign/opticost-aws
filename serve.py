@@ -1,18 +1,17 @@
 import cv2
+import fitz
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 import math
-#import boto3
-from PIL import Image
 import io
+from PIL import Image
 from matplotlib import pyplot as plt
 from landingai.predict import Predictor
 from landingai.visualize import overlay_predictions
 
-from typing import Union
-from fastapi import FastAPI, Response, File
+from fastapi import FastAPI, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
 origins =[
     'http://127.0.0.1:5500/',
@@ -29,83 +28,87 @@ app.add_middleware(
     allow_methods=["POST"],
     allow_headers=["*"],
 )
-## NEXT 5 Clusters are for Preparing S3 images saved for loading to EC2 instance prior to running the remainder. 
-## To be adjusted later based on workflow requirements - this is for demo usage only until we finalize
 
-# Initialize a Boto3 S3 client
-#s3 = boto3.client('s3')
+def convert_to_png_and_resize(file: UploadFile, max_pixels=5400000):
+    try:
+        file_extension = file.filename.split(".")[-1].lower()
+        images = []
 
-# Specify your S3 bucket and the image keys
-# bucket_name = 'opticostdatabase'
-# image_key_Base = 'Test CV Images/roof112.jpg'
-# image_key_Processed = 'Test CV Images/roof lines AI demo3.PNG'
-# image_key_PreProcessed = 'Test CV Images/Roof Area Prediction.png'
+        if file_extension == 'pdf':
+            with fitz.open(stream=io.BytesIO(file.file.read())) as doc:
+                for page_num in range(len(doc)):
+                    page = doc.load_page(page_num)
+                    pix = page.get_pixmap()
+                    img = Image.open(io.BytesIO(pix.tobytes()))
+                    current_pixels = img.width * img.height
+                    if current_pixels > max_pixels:
+                        scaling_factor = math.sqrt(max_pixels / current_pixels)
+                        new_width = int(img.width * scaling_factor)
+                        new_height = int(img.height * scaling_factor)
+                        img = img.resize((new_width, new_height), Image.ANTIALIAS)
+                    images.append(img)
+        else:
+            img = Image.open(io.BytesIO(file.file.read()))
+            current_pixels = img.width * img.height
+            if current_pixels > max_pixels:
+                scaling_factor = math.sqrt(max_pixels / current_pixels)
+                new_width = int(img.width * scaling_factor)
+                new_height = int(img.height * scaling_factor)
+                img = img.resize((new_width, new_height), Image.ANTIALIAS)
+            images.append(img)
 
-# # Retrieve and read the first image
-# obj1 = s3.get_object(Bucket=bucket_name, Key=image_key_Base)
-# image_content1 = obj1['Body'].read()
-# image1 = Image.open(io.BytesIO(image_content1))
-
-# # Retrieve and read the second image
-# obj2 = s3.get_object(Bucket=bucket_name, Key=image_key_Processed)
-# image_content2 = obj2['Body'].read()
-# image2 = Image.open(io.BytesIO(image_content2))
-
-# # Retrieve and read the third image
-# obj3 = s3.get_object(Bucket=bucket_name, Key=image_key_PreProcessed)
-# image_content3 = obj3['Body'].read()
-# image3 = Image.open(io.BytesIO(image_content3))
+        return images
+    except Exception as e:
+        # Handle exceptions
+        print(f"Error converting file: {e}")    
 
 @app.post("/analyze")
-def analyze(response: Response, file: bytes = File(...)):
+def analyze(response: Response, file: UploadFile = File(...)):
+
     print("Request received...")
-    response_dict = {"Success":False}
+    response_dict = {"Success": False}
+
     # Enter your API Key and Secret (for Area Detection)
     endpoint_id = "54ab4c09-ef9f-4ddd-bc84-71361a0d16d7"
     api_key = "land_sk_h4VB3GlORHrUrd8MVsihDJjcKy9x128xwCKD8YcV1gzKjnJ7cZ"
 
-    # Load your image
-    user_uploaded_image = Image.open(io.BytesIO(file))
-    print('user uploaded image',user_uploaded_image)
-    user_uploaded_image.show()
-    # Convert PIL Image to OpenCV format
-    image1_np = np.array(user_uploaded_image)
+    # Load image & run conversion
+    user_uploaded_file = convert_to_png_and_resize(file)
+
+    # Result of conversion (use first image) 
+    converted_image = user_uploaded_file[0]
+
+    # Convert converted image to OpenCV format
+    image1_np = np.array(converted_image)
 
     # Convert the image from RGB to BGR (OpenCV uses BGR)
     image1_bgr = cv2.cvtColor(image1_np, cv2.COLOR_RGB2BGR)
-    #image2_bgr = cv2.cvtColor(image2_np, cv2.COLOR_RGB2BGR)
 
     # Convert the image to grayscale
     converted_to_gray_scale = cv2.cvtColor(image1_bgr, cv2.COLOR_BGR2GRAY)
 
-    # Run inference
-    #predictor = Predictor(endpoint_id, api_key=api_key)
-    #ai_landing_predictions = predictor.predict(converted_to_gray_scale)
-    #ai_landing_predictions_overlay = overlay_predictions(ai_landing_predictions, user_uploaded_image) #result of this is image 3
-    #print('first prediction with overlay, this is image 3',#ai_landing_predictions_overlay)
-    #ai_landing_predictions_overlay.show()
+    # Run 1st inference
+    first_predictor = Predictor(endpoint_id, api_key=api_key)
+    first_predictions = first_predictor.predict(converted_to_gray_scale)
+    first_predictions_overlay = overlay_predictions(first_predictions, converted_image) #result of this is image 3
+    #print('first prediction with overlay, this is image 3',#first_predictions_overlay)
+    #first_predictions_overlay.show()
+
     # Enter your API Key (for Colored Segment Detection)
-    #endpoint_id2 = "aa131064-09f2-476f-b7e7-704887b5b1b0"
-    #api_key2 = "land_sk_39Z470ya52y2sJ0gzYlzFNZuif8XdGr0Z1t8AAdnsbeJd1B1wu"
+    endpoint_id2 = "aa131064-09f2-476f-b7e7-704887b5b1b0"
+    api_key2 = "land_sk_39Z470ya52y2sJ0gzYlzFNZuif8XdGr0Z1t8AAdnsbeJd1B1wu"
 
-    # Run inference
-    #predictor2 = Predictor(endpoint_id2, api_key=api_key2)
-    #predictions2 = predictor2.predict(converted_to_gray_scale) #result of this is image 2
-    #predictions2_overlay = overlay_predictions(predictions2, #user_uploaded_image)
-    #print('second prediction with overla, this is image 2',#predictions2_overlay)
-    predictions2_overlay.show() 
-    # Example of processing image1 and getting an image with predictions
-    #image_with_preds = ai_landing_predictions 
+    # Run 2nd inference
+    second_predictor = Predictor(endpoint_id2, api_key=api_key2)
+    second_predictions = second_predictor.predict(converted_to_gray_scale) #result of this is image 2
+    second_predictions_overlay = overlay_predictions(second_predictions, converted_image)
+    #print('second prediction with overlay, this is image 2',#second_predictions_overlay)
+    #second_predictions_overlay.show() 
+    
 
-    # continue the above example to save
-    # image_with_preds = overlay_predictions(predictions, image)
-    # image_with_preds.save(r"C:\Users\LPlazola\Desktop\Roof Area Prediction.png")
-    #image_with_preds.save("/home/ec2-user/Roof_Area_Prediction.png")
+    # Convert first prediction image to OpenCV format for further processing
+    image_with_preds_np = np.array(first_predictions_overlay) #feed image3 or result of first prediction overlay here
 
-
-    # Convert image_with_preds to OpenCV format for further processing
-    image_with_preds_np = np.array(ai_landing_predictions_overlay) #feed image3 or result of first prediction overlay here
-    #print('image with pred np',image_with_preds_np)
     image_with_preds_cv2 = image_with_preds_np[:, :, ::-1]
 
     # Convert to HSV color space
@@ -164,10 +167,6 @@ def analyze(response: Response, file: bytes = File(...)):
             color2_proportion += (end - start + 1)  # Length of the color range
     color2_proportion /= hsv_image.size
 
-    # Print color proportions
-    ##print(f"Proportion of Void: {color1_proportion:.2f}")  # Change label for Color 1
-    ##print(f"Proportion of Plane Roof Area: {color2_proportion:.2f}")  # Change label for Color 2
-
     # Calculate the number of pixels for each color range
     pixel_count_color1 = 0
     pixel_count_color2 = 0
@@ -200,14 +199,11 @@ def analyze(response: Response, file: bytes = File(...)):
     # Adjust the default scale based on the desired size
     adjusted_scale_factor = default_scale_factor * (height_scale_factor + width_scale_factor) / 2
 
-    # Convert PIL Image to NumPy array (in RGB format) this is a duplicated code with line 89
-    image_with_preds_np = np.array(ai_landing_predictions_overlay)
-
     # Convert from RGB to BGR format for OpenCV
     image_with_preds_bgr = cv2.cvtColor(image_with_preds_np, cv2.COLOR_RGB2BGR)
 
-    # Assuming width_scale_factor and height_scale_factor are defined
-    adjusted_image = cv2.resize(image_with_preds_bgr, None, fx=width_scale_factor, fy=height_scale_factor)
+    # Assuming width_scale_factor and height_scale_factor are defined #line below not used
+    #adjusted_image = cv2.resize(image_with_preds_bgr, None, fx=width_scale_factor, fy=height_scale_factor)
 
 
     ## Perform calculations or measurements using the adjusted image
@@ -227,10 +223,10 @@ def analyze(response: Response, file: bytes = File(...)):
 
     # Calculate the measurements in square feet
     measurement_color1 = pixel_count_color1 * square_feet_per_pixel
-    measurement_color2 = pixel_count_color2 * square_feet_per_pixel
+    #measurement_color2 = pixel_count_color2 * square_feet_per_pixel
 
     # Calculate the total square footage in the image
-    total_square_feet = pixel_count_color1 * square_feet_per_pixel
+    #total_square_feet = pixel_count_color1 * square_feet_per_pixel
 
     ## Apply roof slope as a multiplier to the roof area measurement
 
@@ -279,20 +275,18 @@ def analyze(response: Response, file: bytes = File(...)):
     #cv2.imshow("Adjusted Image", adjusted_image)
     #cv2.waitKey(0)
     #cv2.destroyAllWindows()
-    response_dict['measurement_color'] = measurement_color1
+    
 
 
     # Load the image
-    ## This should be same as the OUTPUT image of the previous "roof area prediction.png" @ line 28
-    ## Currently using the locally saved and uploaded version to shortcut until we can save the initial output and feed it directly here.
-    predictions2_overlay_np = np.array(predictions2_overlay)
-    predictions2_overlay_bgr = cv2.cvtColor(predictions2_overlay_np, cv2.COLOR_RGB2BGR)
-    img = predictions2_overlay_bgr 
-    #?# img = cv2.cvtColor(image2_bgr, cv2.COLOR_RGB2BGR)
+    #instead of using image2 from s3 and convert to np then brg, feed the result of 2nd prediction image with overlay here then convert to np and bgr
+    second_predictions_overlay_np = np.array(second_predictions_overlay)
+    second_predictions_overlay_bgr = cv2.cvtColor(second_predictions_overlay_np, cv2.COLOR_RGB2BGR)
+    img = second_predictions_overlay_bgr 
 
-    # if img is None:
-    #     print("Failed to load the image.")
-    #     exit()
+    if img is None:
+        print("Failed to load the image.")
+        exit()
 
     #imgray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     #ret, thresh = cv2.threshold(imgray, 127, 255, 0)
@@ -301,13 +295,12 @@ def analyze(response: Response, file: bytes = File(...)):
     # Define the color codes for each roof feature
     ## Final version will have slight hue adjustments to the color code due to landingai processing differences
     color_codes = {
-        "Ridge": ([55, 55, 183], [90, 90, 218]),  # Red
-        "Eave": ([223, 223, 95], [231, 231, 97]),  # Light Blue
-        "Hip": ([55, 183, 55], [123, 251, 123]),  # Green
-        "Valley": ([63, 146, 191], [124, 207, 252]),  # Orange
+        "Ridge": ([255, 178, 178], [255, 178, 178]),  # Red
+        "Eave": ([178, 255, 255], [178, 255, 255]),  # Light Blue
+        "Hip": ([178, 255, 178], [178, 255, 178]),  # Green
+        "Valley": ([255, 228, 178], [255, 228, 178]),  # Orange
         # Add other colors for features as needed in the future (Rake, Roof to Wall, Step Flashing, etc.)
     }
-
 
     # Function to skeletonize the image (reduce to single pixel width)
     def skeletonize(img):
@@ -326,6 +319,9 @@ def analyze(response: Response, file: bytes = File(...)):
     # Define the tolerance for RGB values
     ## This is what works; keep unless other values/ranges tested further
     tolerance = 40
+    #response_dict['measurement_color'] = measurement_color1
+    response_dict['measurement_of_roof_area'] = measurement_color1
+    response_dict['total_number_of_pixel_of_image'] = total_pixels
 
     # Process each color code
     for feature, (lower_color, upper_color) in color_codes.items():
@@ -422,4 +418,8 @@ def analyze(response: Response, file: bytes = File(...)):
         
         # Calculate the linear feet total of each feature
         print(f"{feature} = {length*.00125} LF")
-        #print([feature])
+        #print('feature',[feature])
+        #print('api response',response_dict)
+        response_dict["Success"] = True
+        response_dict[f"{feature}"] = length
+    return response_dict
