@@ -423,5 +423,5 @@ def analyze(response: Response, file: UploadFile = File(...)):
         #print('feature',[feature])
         #print('api response',response_dict)
         response_dict["Success"] = True
-        response_dict[f"{feature}"] = length
+        response_dict[f"{feature}"] = length*.00125
     return response_dict
