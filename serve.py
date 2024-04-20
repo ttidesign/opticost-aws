@@ -92,7 +92,7 @@ def read_root():
 def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...)):
     # user_entered_width: int = Form(...), user_entered_height: int = Form(...)
     print("Request received...")
-    response_dict = {"Success": False}
+    response_dict = {"Processing": True}
 
     # Load image & run conversion
     user_uploaded_file = convert_to_png_and_resize(file)
@@ -372,7 +372,6 @@ def analyze(response: Response, file: UploadFile = File(...), user_entered_scale
         
         # Store the length in the dictionary
         feature_lengths_dict[feature] = scaled_length
-        response_dict = {"Success": True}
 
         response_dict[f"{feature}"] = scaled_length
     print(response_dict)
