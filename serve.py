@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from landingai.predict import Predictor
 from landingai.visualize import overlay_predictions
 
-from fastapi import FastAPI, Response, UploadFile, File
+from fastapi import FastAPI, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
@@ -39,7 +39,7 @@ api_key = os.getenv("API_KEY1")
 endpoint_id2 = os.getenv("ENDPOINT_ID2")
 api_key2 = os.getenv("API_KEY2")
 
-def convert_to_png_and_resize(file: UploadFile, max_pixels=5400000):
+def convert_to_png_and_resize(file: UploadFile, max_pixels=1000000):
     try:
         file_extension = file.filename.split(".")[-1].lower()
         images = []
@@ -89,10 +89,10 @@ def read_root():
     return{'Nothing to see here'}
 
 @app.post("/analyze")
-def analyze(response: Response, file: UploadFile = File(...)):
+def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...)):
     # user_entered_width: int = Form(...), user_entered_height: int = Form(...)
     print("Request received...")
-    response_dict = {"Success":False}
+    response_dict = {"Success": False}
 
     # Load image & run conversion
     user_uploaded_file = convert_to_png_and_resize(file)
@@ -165,7 +165,7 @@ def analyze(response: Response, file: UploadFile = File(...)):
     eroded_mask = cv2.erode(non_dominant_mask, kernel_shrink, iterations=1)
 
     # Dilate the mask to expand it by roughly 40 pixels
-    kernel = np.ones((80, 80), np.uint8)  # Adjust the kernel size as needed for your specific requirement
+    kernel = np.ones((200, 200), np.uint8)  # Adjust the kernel size as needed for your specific requirement
     dilated_mask = cv2.dilate(eroded_mask, kernel, iterations=1)
 
 
@@ -232,22 +232,16 @@ def analyze(response: Response, file: UploadFile = File(...)):
     ## TBD - Option to choose between different page size options later, to be used if autosizing is either unavailable or incorrect. 
 
     # Define the default input image size (24" high by 36" wide is standard, but should be similar 2:3 proportional sizes, such as 12"x18" - rarely may be another size, such as 8.5" x 11")
-    default_height_inches = 24 #user_entered_height along with file upload above
-    default_width_inches = 36  #user_entered_width along with file upload above
+    #default_height_inches = 24 #user_entered_height along with file upload above
+    #default_width_inches = 36  #user_entered_width along with file upload above
     
     # Define the default scale (ex. 1/4" on the image = 1 foot in real life)
-    default_scale_factor = (3) / (8.0)  # Adjust as needed
+    default_scale_factor = round(user_entered_scale, 3)  # Adjust as needed
 
     # Define the desired height and width for final calculation purposes
     desired_height_inches = 24  # Adjust as needed
     desired_width_inches = 36   # Adjust as needed
 
-    # Calculate the scaling factors for height and width
-    height_scale_factor = desired_height_inches / default_height_inches
-    width_scale_factor = desired_width_inches / default_width_inches
-
-    # Adjust the default scale based on the desired size
-    adjusted_scale_factor = default_scale_factor * (height_scale_factor + width_scale_factor) / 2
 
 
     #################################################################
@@ -255,8 +249,11 @@ def analyze(response: Response, file: UploadFile = File(...)):
     #################################################################
     
     # Calculate the scaling factors for height and width
-    height_scale_factor = gray.shape[0] / default_height_inches
-    width_scale_factor = gray.shape[1] / default_width_inches
+    #height_scale_factor = gray.shape[0] / default_height_inches
+    #width_scale_factor = gray.shape[1] / default_width_inches
+
+    # Adjust the default scale based on the desired size
+    #adjusted_scale_factor = default_scale_factor * (height_scale_factor + width_scale_factor) / 2
 
     # Count the total number of pixels in the image
     total_pixels = gray.shape[0] * gray.shape[1]
@@ -270,43 +267,26 @@ def analyze(response: Response, file: UploadFile = File(...)):
     print(f"Page Inches per Pixel (Width): {page_inches_per_pixel_desired_width} in/px W")
     print(f"Page Inches per Pixel (Height): {page_inches_per_pixel_desired_height} in/px H")
 
-    # Convert inches per pixel to feet per pixel
-    real_linear_feet_per_pixel = (1/((1/4)/(36/1080)))
-    #page_linear_feet_per_pixel = ((1/4) / .03333333)  # @ 1/4" scale
-
-    # Define the conversion factor (square feet per pixel)
-    #conversion_factor = 0.00385  # Example: 0.01 square feet per pixel
-
     # Calculate the measurements in square feet
     measurement_color1 = pixel_count_color1 * square_feet_per_pixel
-    #measurement_color2 = pixel_count_color2 * square_feet_per_pixel # was not used in code
 
     # Calculate the total square footage in the image
     total_square_feet = pixel_count_color1 * square_feet_per_pixel
 
-
-    #-TBD
-
-    ## Create page scale options (e.g. 1/4" = 1', 1/2" = 1', 3/8" = 1', etc.)
-
     #-TBD
 
     # Display results
-    print(f"Assumed Scale Factor: 1/{int(1/adjusted_scale_factor)} inch per foot")
+    #print(f"Assumed Scale Factor: 1/{int(1/adjusted_scale_factor)} inch per foot")
+    #print(f"Linear feet per pixel: {real_linear_feet_per_pixel} lf/pixel")
     print(f"Square Feet per Pixel: {square_feet_per_pixel:.6f} sq. ft/pixel")
-    print(f"Linear feet per pixel: {real_linear_feet_per_pixel} lf/pixel")
     print(f"Total Pixels in the Image: {total_pixels}")
     print(f"Total Square Feet on the Roof: {total_square_feet:.2f} sq. ft")
 
     # Display the adjusted scale
-    print(f"Adjusted Scale Factor: 1/{int(1/adjusted_scale_factor)} inch per foot")
+    #print(f"Adjusted Scale Factor: 1/{int(1/adjusted_scale_factor)} inch per foot")
 
     # print(f"Measurement of Void: {measurement_color2:.2f} sq. ft.")  # Change label for Color 1
     print(f"Measurement of Roof Area - Plane: {measurement_color1:.2f} sq. ft.")  # Change label for Color 2
-
-    # Add the square foot result to the image
-    # result_text = f"Total Roof Area: {total_square_feet:.2f} sq. ft"
-    # cv2.putText(image_with_preds, result_text, (20, 30), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 255), 2)
 
 
     ################################################################################
@@ -327,10 +307,13 @@ def analyze(response: Response, file: UploadFile = File(...)):
     }
 
     # Tolerance value
-    tolerance = 15
+    tolerance = 20
     response_dict['measurement_of_roof_area'] = measurement_color1
     response_dict['total_number_of_pixel_of_image'] = total_pixels
+    scale_factor = ((8.5)/(1/8))/(gray.shape[0])
 
+    # Initialize the dictionary to store the lengths for each feature
+    feature_lengths_dict = {}
 
     ###############################################################################
     ## LOOP THROUGH FEATURE DETECTION PROCESS FOR MEASURING EACH DESIRED FEATURE ##
@@ -363,70 +346,34 @@ def analyze(response: Response, file: UploadFile = File(...)):
         
         reduced_mask = cv2.erode(mask, kernel, iterations=1)
         median = cv2.medianBlur(reduced_mask, 3)
-        median2 = cv2.morphologyEx(median, cv2.MORPH_OPEN, kernel)
         
         
         ##Before applying Hough Line Transform, preprocess the mask
         kernel = np.ones((3,3), np.uint8)  # 5x5 kernel for dilation, adjust size as needed
-        #
     
+        dilated_mask = cv2.dilate(median, kernel, iterations = 4)  # You can adjust iterations if needed
+
+        # Find contours from the binary masks
+        contours, _ = cv2.findContours(dilated_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Initialize list for storing contour perimeters for each feature
+        feature_lengths = []
         
-        # Skeletonize the mask
-        #mask = skeletonize(dilated_mask)
-        dilated_mask = cv2.dilate(median, kernel, iterations = 5)  # You can adjust iterations if needed
-
-        #blurred_mask = cv2.GaussianBlur(dilated_mask, (3, 3), 1)  # 5x5 Gaussian kernel, adjust size as needed
-    
-        ## These are the small graphical output tiles @ below the cell after processing
-        # plt.subplot(121),plt.imshow(mask),plt.title('mask')
-        # plt.xticks([]), plt.yticks([])
-        # plt.subplot(122),plt.imshow(dilated_mask),plt.title('dilated_mask')
-        # plt.xticks([]), plt.yticks([])
-        # plt.show()
+        for contour in contours:
+            # Calculate and store the perimeter of each object contour within the mask
+            perimeter = cv2.arcLength(contour, True)  # True indicates that the contour is closed
+            feature_lengths.append(perimeter)
         
-        # Invert the mask to make it printer-friendly
-        ## mask = cv2.bitwise_not(EdgeMask)
         
-         # Function to calculate distance between two points
-        def line_length(line):
-            x1, y1, x2, y2 = line[0]
-            return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-
-        # Apply Hough Line Transform
-        lines = cv2.HoughLinesP(dilated_mask, 1, np.pi / 180, threshold=50, minLineLength=10, maxLineGap=10)
-
-        # Initialize total length variable
-        total_length = 0
-
-        # Iterate through each line, calculate its length, and add it to the total length
-        if lines is not None:
-            for line in lines:
-                total_length += line_length(line)
-
-        #cv2.imwrite(f"mask_for_{feature}.png", dilated_mask)  # This will save the masks with filenames like "mask_for_ridge.png", "mask_for_eave.png", etc., based on the feature
-        # Initialize the dictionary to store the lengths
-        lengths = {}
-        
-        # Compute the length of the chain
-        ## Uses Dilated Mask outputs previously generated
-        length = cv2.countNonZero(mask)
+        # Sum the perimeters of all contours to get total length
+        total_feature_length = sum(feature_lengths)
+        # Adjust length based on your scale factor or specific needs
+        scaled_length = total_feature_length * scale_factor * 0.5 # Adjust scale_factor accordingly; ## 0.5 is to cut the contour length in half, which ends up being the true length
         
         # Store the length in the dictionary
-        lengths[feature] = length
+        feature_lengths_dict[feature] = scaled_length
+        response_dict = {"Success": True}
 
-        # Calculate and print the total number of pixels
-        #total_pixels = overlayed_image3_np.shape[0] * overlayed_image3_np.shape[1]
-        #print(f"Total number of pixels in the image: {total_pixels}")
-        
-        # Show total length of features 
-        #print(f"{feature} length: {length} pixels")
-        
-        
-        # Calculate the linear feet total of each feature
-        #print(f"{feature} = {length*(.133333 / 12)} LF")
-        #print('feature',[feature])
-        #print('api response',response_dict)
-        #print(length)
-        response_dict[f"{feature}"] = length*(.133333 / 12)
+        response_dict[f"{feature}"] = scaled_length
     print(response_dict)
     return response_dict
