@@ -89,7 +89,7 @@ def read_root():
     return{'Nothing to see here'}
 
 @app.post("/analyze")
-def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...), user_entered_height: float = Form(...)):
+def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...), user_entered_height: float = Form(24.0)):
     # user_entered_width: int = Form(...), user_entered_height: int = Form(...)
     print("Request received...")
     response_dict = {"Processing": True}
