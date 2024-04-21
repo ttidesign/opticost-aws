@@ -89,7 +89,7 @@ def read_root():
     return{'Nothing to see here'}
 
 @app.post("/analyze")
-def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...)):
+def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...), user_entered_height: float = Form(...)):
     # user_entered_width: int = Form(...), user_entered_height: int = Form(...)
     print("Request received...")
     response_dict = {"Processing": True}
@@ -232,7 +232,10 @@ def analyze(response: Response, file: UploadFile = File(...), user_entered_scale
     ## TBD - Option to choose between different page size options later, to be used if autosizing is either unavailable or incorrect. 
 
     # Define the default input image size (24" high by 36" wide is standard, but should be similar 2:3 proportional sizes, such as 12"x18" - rarely may be another size, such as 8.5" x 11")
-    #default_height_inches = 24 #user_entered_height along with file upload above
+    if user_entered_height:
+        default_height_inches = user_entered_height
+    else: 
+        default_height_inches = 24
     #default_width_inches = 36  #user_entered_width along with file upload above
     
     # Define the default scale (ex. 1/4" on the image = 1 foot in real life)
@@ -310,7 +313,7 @@ def analyze(response: Response, file: UploadFile = File(...), user_entered_scale
     tolerance = 20
     response_dict['measurement_of_roof_area'] = measurement_color1
     response_dict['total_number_of_pixel_of_image'] = total_pixels
-    scale_factor = ((8.5)/(1/8))/(gray.shape[0])
+    scale_factor = ((default_height_inches)/(1/8))/(gray.shape[0])
 
     # Initialize the dictionary to store the lengths for each feature
     feature_lengths_dict = {}
