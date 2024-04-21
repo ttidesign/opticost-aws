@@ -376,6 +376,6 @@ def analyze(response: Response, file: UploadFile = File(...), user_entered_scale
         # Store the length in the dictionary
         feature_lengths_dict[feature] = scaled_length
 
-        response_dict[f"{feature}"] = scaled_length
+        response_dict[f"{feature}"] = round(scaled_length,2)
     print(response_dict)
     return response_dict
