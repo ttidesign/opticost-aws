@@ -311,7 +311,7 @@ def analyze(response: Response, file: UploadFile = File(...), user_entered_scale
 
     # Tolerance value
     tolerance = 20
-    response_dict['measurement_of_roof_area'] = measurement_color1
+    response_dict['measurement_of_roof_area'] = round(measurement_color1, 2)
     response_dict['total_number_of_pixel_of_image'] = total_pixels
     scale_factor = ((default_height_inches)/(1/8))/(gray.shape[0])
 
