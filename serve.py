@@ -5,6 +5,7 @@ import os
 import math
 import io
 from PIL import Image
+from typing import Optional
 from dotenv import load_dotenv
 from landingai.predict import Predictor
 from landingai.visualize import overlay_predictions
@@ -89,7 +90,7 @@ def read_root():
     return{'Nothing to see here'}
 
 @app.post("/analyze")
-def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...), user_entered_height: float = Form(24.0)):
+def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...), user_entered_height: Optional[float] = Form(None)):
     # user_entered_width: int = Form(...), user_entered_height: int = Form(...)
     print("Request received...")
     response_dict = {"Processing": True}
