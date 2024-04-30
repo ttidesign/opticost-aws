@@ -19,6 +19,7 @@ app = FastAPI()
 origins =[
     'http://127.0.0.1:5500/',
     'http://localhost',
+    'http://localhost:3000',
     'http://localhost:8080',
     'http://opticost.ai',
     'https://opticost.ai',
@@ -84,13 +85,14 @@ def convert_to_png_and_resize(file: UploadFile, max_pixels=1000000):
         # Handle exceptions
         print(f"Error converting file: {e}")    
         return []
+
     
 @app.get('/')
 def read_root():
     return{'Nothing to see here'}
 
 @app.post("/analyze")
-def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...), user_entered_height: Optional[float] = Form(None)):
+def analyze(response: Response, file: UploadFile = File(...), user_entered_scale: float = Form(...), user_entered_height: Optional[float] = Form(None), user_entered_slope_factor: float = Form(...)):
     # user_entered_width: int = Form(...), user_entered_height: int = Form(...)
     print("Request received...")
     response_dict = {"Processing": True}
@@ -246,6 +248,9 @@ def analyze(response: Response, file: UploadFile = File(...), user_entered_scale
     desired_height_inches = 24  # Adjust as needed
     desired_width_inches = 36   # Adjust as needed
 
+    # Rise is equal to the numerator float in the slope fraction -- Ex. If slope is [5.0 / 12], rise is [5.0] and slope_multiplier would then be equal to [1.08333]
+    # slope_multiplier would typically apply to the AREA, RAKE, HIP, and VALLEY
+    slope_multiplier = ((user_entered_slope_factor ** 2 + 144) ** 0.5) / 12
 
 
     #################################################################
@@ -275,7 +280,7 @@ def analyze(response: Response, file: UploadFile = File(...), user_entered_scale
     measurement_color1 = pixel_count_color1 * square_feet_per_pixel
 
     # Calculate the total square footage in the image
-    total_square_feet = pixel_count_color1 * square_feet_per_pixel
+    total_square_feet = pixel_count_color1 * square_feet_per_pixel * slope_multiplier
 
     #-TBD
 
@@ -309,6 +314,9 @@ def analyze(response: Response, file: UploadFile = File(...), user_entered_scale
                 
         # Add other colors for features as needed in the future (Rake, Roof to Wall, Step Flashing, etc.)
     }
+
+    # Features to apply the slope multiplier to
+    features_to_scale = ["Rake", "Valley", "Hip"]
 
     # Tolerance value
     tolerance = 20
@@ -377,6 +385,15 @@ def analyze(response: Response, file: UploadFile = File(...), user_entered_scale
         # Store the length in the dictionary
         feature_lengths_dict[feature] = scaled_length
 
-        response_dict[f"{feature}"] = round(scaled_length,2)
+        response_dict[f"{feature}"] = round(scaled_length, 2)
+
+        # Check if the specified features should have the multiplier applied
+        if feature in features_to_scale:
+            scaled_length *= slope_multiplier
+
+        # Store the new adjusted lengths in the dictionary    
+        feature_lengths_dict[feature] = scaled_length
+        response_dict[f"{feature}"] = round(scaled_length, 2)
+
     print(response_dict)
     return response_dict
