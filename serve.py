@@ -9,13 +9,13 @@ from typing import Optional
 from dotenv import load_dotenv
 from landingai.predict import Predictor
 from landingai.visualize import overlay_predictions
-
+from mangum import Mangum
 from fastapi import FastAPI, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 app = FastAPI()
-
+handler =  Mangum(app)
 origins =[
     'http://127.0.0.1:5500/',
     'http://127.0.0.1',
